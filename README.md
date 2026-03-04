@@ -1,31 +1,91 @@
-# Express.js on Vercel
+# vercel-curse-proxy
 
-Basic Express.js + Vercel example that serves html content, JSON data and simulates an api route.
+Безопасный backend-прокси для CurseForge API на базе шаблона **Express.js on Vercel**.
 
-## How to Use
+## Что делает этот сервис
 
-You can choose from one of the following two methods to use this repository:
+- Прячет ваш `CURSEFORGE_API_KEY` на серверной стороне.
+- Даёт удобные endpoint'ы для Android-приложения:
+  - `GET /api` — health check
+  - `GET /api/search?q=&page=&version=`
+  - `GET /api/file/:fileId`
+  - `GET /api/download?fileId=` (возвращает `302` редирект)
+- Добавляет edge-кэш заголовком:
+  - `Cache-Control: s-maxage=60, stale-while-revalidate=120`
+- Включает небольшой in-memory cache для поиска на 30 секунд (эфемерный в serverless).
+- Включает базовую in-memory заглушку rate limit по IP.
 
-### One-Click Deploy
+## Структура проекта
 
-Deploy the example using [Vercel](https://vercel.com?utm_source=github&utm_medium=readme&utm_campaign=vercel-examples):
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/git/external?repository-url=https://github.com/vercel/examples/tree/main/solutions/express&project-name=express&repository-name=express)
-
-### Clone and Deploy
-
-```bash
-git clone https://github.com/vercel/examples/tree/main/solutions/express
+```txt
+/
+├─ api/
+│  ├─ index.js
+│  ├─ routes/
+│  │  ├─ search.js
+│  │  ├─ file.js
+│  │  └─ download.js
+├─ package.json
+├─ README.md
+├─ .gitignore
 ```
 
-Install the Vercel CLI:
+## Настройка и деплой на Vercel
+
+1. Импортируйте репозиторий в Vercel.
+2. Откройте **Project → Settings → Environment Variables**.
+3. Добавьте переменную:
+   - **Name:** `CURSEFORGE_API_KEY`
+   - **Value:** ваш API ключ CurseForge
+4. Сохраните переменную и сделайте redeploy проекта.
+
+> Важно: ключ читается только из `process.env.CURSEFORGE_API_KEY`.
+
+## Локальный запуск
 
 ```bash
-npm i -g vercel
+npm install
+npm run dev
 ```
 
-Then run the app at the root of the repository:
+Для локальной проверки добавьте `CURSEFORGE_API_KEY` в окружение (например, через Vercel env или shell export).
+
+## Примеры запросов (curl)
+
+> Замените `https://your-project.vercel.app` на ваш домен.
+
+Health check:
 
 ```bash
-vercel dev
+curl -i "https://your-project.vercel.app/api"
 ```
+
+Search:
+
+```bash
+curl -i "https://your-project.vercel.app/api/search?q=shaders&page=1"
+```
+
+File metadata:
+
+```bash
+curl -i "https://your-project.vercel.app/api/file/123456"
+```
+
+Download redirect (ожидается `302` + заголовок `Location`):
+
+```bash
+curl -i "https://your-project.vercel.app/api/download?fileId=123456"
+```
+
+## Безопасность
+
+- **Не коммитьте API ключи** в репозиторий.
+- Если ключ случайно утёк — сразу сгенерируйте новый в CurseForge.
+- Сервер не логирует полные ответы CurseForge, только короткие debug snippets при ошибках.
+
+## Примечание про проксирование файла
+
+Сейчас `/api/download` использует **302 redirect** на реальный URL загрузки (рекомендуется).
+
+Если делать полное проксирование/стрим файла через Vercel, это будет расходовать bandwidth и может быстрее упираться в лимиты.
